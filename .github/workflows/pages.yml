@@ -1,0 +1,76 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+      # CSS 里的 background-image 是绝对路径，必须先改写再推到 CDN 分支，
+      # 否则浏览器从 CDN 拿到的还是指向 GitHub Pages 的旧地址。
+      - name: 改写 CSS 图片走 CDN
+        env:
+          CDN_MEDIA_BASE: https://gh-proxy.com/https://raw.githubusercontent.com/${{ github.repository }}/main/public/assets
+        run: node scripts/cdn-rewrite.mjs css
+
+      # GitHub Pages 直连国内太慢，把 JS/CSS 推到 assets 分支交给 jsDelivr 分发。
+      # 文件名带内容 hash，用 commit sha 固定引用，不存在缓存过期问题。
+      - name: 发布构建产物到 assets 分支
+        id: cdn
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          mkdir -p /tmp/cdn/assets
+          cp dist/assets/*.js dist/assets/*.css /tmp/cdn/assets/
+          cd /tmp/cdn
+          git init -q -b assets
+          git add -A
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -qm "build ${GITHUB_SHA::7}"
+          git push -q --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" assets
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # gh-proxy 会把 .js/.css 返回成 text/plain，module script 会被浏览器拒绝执行，
+      # 所以入口 js/css 必须用 jsDelivr（正确 MIME），图片视频才用 gh-proxy。
+      - name: 改写首屏资源走 CDN
+        env:
+          CDN_JS_BASE: https://cdn.jsdelivr.net/gh/${{ github.repository }}@${{ steps.cdn.outputs.sha }}/assets
+          CDN_MEDIA_BASE: https://gh-proxy.com/https://raw.githubusercontent.com/${{ github.repository }}/main/public/assets
+        run: node scripts/cdn-rewrite.mjs html
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
