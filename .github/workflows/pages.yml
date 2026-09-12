@@ -30,7 +30,7 @@ jobs:
       # 否则浏览器从 CDN 拿到的还是指向 GitHub Pages 的旧地址。
       - name: 改写 CSS 图片走 CDN
         env:
-          CDN_MEDIA_BASE: https://gh-proxy.com/https://raw.githubusercontent.com/${{ github.repository }}/main/public/assets
+          CDN_MEDIA_BASE: https://gh-proxy.com/https://raw.githubusercontent.com/${{ github.repository }}/main/public
         run: node scripts/cdn-rewrite.mjs css
 
       # GitHub Pages 直连国内太慢，把 JS/CSS 推到 assets 分支交给 jsDelivr 分发。
@@ -57,7 +57,7 @@ jobs:
       - name: 改写首屏资源走 CDN
         env:
           CDN_JS_BASE: https://cdn.jsdelivr.net/gh/${{ github.repository }}@${{ steps.cdn.outputs.sha }}/assets
-          CDN_MEDIA_BASE: https://gh-proxy.com/https://raw.githubusercontent.com/${{ github.repository }}/main/public/assets
+          CDN_MEDIA_BASE: https://gh-proxy.com/https://raw.githubusercontent.com/${{ github.repository }}/main/public
         run: node scripts/cdn-rewrite.mjs html
 
       - uses: actions/configure-pages@v5
