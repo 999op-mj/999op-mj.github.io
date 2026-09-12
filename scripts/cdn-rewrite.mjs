@@ -50,8 +50,11 @@ function rewriteHtml() {
   // 1) 统一改写：入口 js/css 走产物 CDN，图片等静态资源走媒体 CDN
   html = html.replace(/(["'])\/(assets|images)\/([^"']+)\1/g, (_, quote, dir, file) => {
     stats.html += 1
-    const base = dir === "assets" && /\.(?:js|css)$/.test(file) ? JS_BASE : MEDIA_BASE
-    return `${quote}${base}/${dir}/${file}${quote}`
+    // JS_BASE 本身已含 assets 目录，MEDIA_BASE 指向 public 根目录，不能共用拼接
+    if (dir === "assets" && /\.(?:js|css)$/.test(file)) {
+      return `${quote}${JS_BASE}/${file}${quote}`
+    }
+    return `${quote}${MEDIA_BASE}/${dir}/${file}${quote}`
   })
 
   // 2) 入口资源加回退；必须在第 1 步之后，否则回退路径会被再次改写
