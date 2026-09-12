@@ -34,6 +34,9 @@ _git-backup-old/
 # 本次优化前的原始视频备份（不入库）
 _video-opt-backup/
 
+# 临时文件
+.tmp-*
+
 # wrangler files
 .wrangler
 .dev.vars*
