@@ -28,10 +28,15 @@ function rewriteCss() {
   for (const file of readdirSync(join(dist, "assets"))) {
     if (!file.endsWith(".css")) continue
     const path = join(dist, "assets", file)
-    const next = readFileSync(path, "utf8").replace(/url\(\s*(["']?)\/assets\//g, (_, quote) => {
-      stats.css += 1
-      return `url(${quote}${MEDIA_BASE}/`
-    })
+    // 必须同时覆盖 /assets/ 与 /images/：CSS 托管在 CDN 上时，
+    // 根相对路径会按 CSS 自己的域名解析（cdn.jsdelivr.net/images/... → 404）。
+    const next = readFileSync(path, "utf8").replace(
+      /url\(\s*(["']?)\/(assets|images)\//g,
+      (_, quote, dir) => {
+        stats.css += 1
+        return `url(${quote}${MEDIA_BASE}/${dir}/`
+      },
+    )
     writeFileSync(path, next)
   }
   console.log(`[cdn-rewrite] CSS ${stats.css} 处`)
@@ -43,10 +48,10 @@ function rewriteHtml() {
   let html = readFileSync(indexHtml, "utf8")
 
   // 1) 统一改写：入口 js/css 走产物 CDN，图片等静态资源走媒体 CDN
-  html = html.replace(/(["'])\/assets\/([^"']+)\1/g, (_, quote, file) => {
+  html = html.replace(/(["'])\/(assets|images)\/([^"']+)\1/g, (_, quote, dir, file) => {
     stats.html += 1
-    const base = /\.(?:js|css)$/.test(file) ? JS_BASE : MEDIA_BASE
-    return `${quote}${base}/${file}${quote}`
+    const base = dir === "assets" && /\.(?:js|css)$/.test(file) ? JS_BASE : MEDIA_BASE
+    return `${quote}${base}/${dir}/${file}${quote}`
   })
 
   // 2) 入口资源加回退；必须在第 1 步之后，否则回退路径会被再次改写
